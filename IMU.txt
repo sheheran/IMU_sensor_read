@@ -1,0 +1,140 @@
+The MPU6050 IMU has both 3-axis accelerometer and 3-axis gyroscope integrated on a single chip. 
+The gyroscope measures rotational velocity or rate of change of the angular position over time, along X,Y and Z axis.
+
+The outputs of the gyroscope are in degrees pre secoend, so in order to get the angular position need to integrae the angular velocity.
+
+---- how accelerometer meassure----
+
+It can mesure gravitational acceleration along the three axesusing some trigonometry, can calculate the angle at which the sensor is pointed.
+
+
+Using I2C protocol for communication with the arduino (2 wires for for connecting 2 wires for powering)
+
+Writting to a slave on the I2C Bus - Textas instrument manual
+
+Just like the Uno, SCL is pin A5 and SDA is pin A4 on the Nano.
+
+
+
+#include <Arduino_FreeRTOS.h>
+#include <Wire.h>
+
+//Defining the functions
+void Task_PrintIMU_data(void *param);
+//Define task handle
+TaskHandle_t Task_Handle1;
+
+//Print IMU data ax, ay, az, (Accelerometer) and gx, gy, gz (Gyroscope) data in serial monitor
+const int MPU = 0x68;
+//Initialize variables
+float AccX, AccY, AccZ;
+float GyroX, GyroY, GyroZ;
+float gyroAngleX, gyroAngleY, gyroAngleZ; 
+float elapsedTime, currentTime, previousTime;
+
+void setup() {
+  Serial.begin(9600);
+
+  xTaskCreate(Task_PrintIMU_data, "Task1", 100, NULL, 1, &Task_Handle1);
+
+  Wire.begin(); //Initialize communication
+
+  Serial.print("Talking to 6B register");
+  Wire.beginTransmission(MPU); //Start the communction with 0x68 MPU6050
+  Wire.write(0x6B); //talk to register 6B
+  Wire.write(0x101);
+  Wire.endTransmission(true);
+  vTaskDelay(20/portTICK_PERIOD_MS);
+
+  //Set sample rate to 500Hz
+  Serial.println("Setting the sample rate to 500Hz");
+  Wire.beginTransmission(MPU);
+  Wire.write(0x19);
+  Wire.write(0x0F);
+  Wire.endTransmission(true);
+  vTaskDelay(20/portTICK_PERIOD_MS);
+
+  //Activate DLPF Digital gyro low pass filter to 188Hz
+  Serial.println("Setting Digital low pass filter gyro to 188Hz");
+  Wire.beginTransmission(MPU);
+  Wire.write(0x1A);
+  Wire.write(0x01);
+  Wire.endTransmission(true);
+  vTaskDelay(20/portTICK_PERIOD_MS);
+
+  //Set Gyro range to 2000DPS (degrees per secoend)
+  Serial.println("Set gyro to 2000 degrees per secoend");
+  Wire.beginTransmission(MPU);
+  Wire.write(0x1B);
+  Wire.write(0x18);
+  Wire.endTransmission(true);
+  vTaskDelay(20/portTICK_PERIOD_MS);
+
+  //Set Accelerometer range to 8G (degrees per secoend)
+  Serial.println("Set gyro to 8 gravitational acceleration");
+  Wire.beginTransmission(MPU);
+  Wire.write(0x1C);
+  Wire.write(0x10);
+  Wire.endTransmission(true);
+  vTaskDelay(20/portTICK_PERIOD_MS);
+
+}
+
+void loop() {
+  // put your main code here, to run repeatedly:
+
+}
+
+void Task_PrintIMU_data(void *param) {
+  (void) param;
+  //Infinite loop
+  while (1) {
+    Serial.println("Printing IMU data");
+    //Read accelerometer data//
+    Wire.beginTransmission(MPU);
+    Wire.write(0x3B);
+    Wire.endTransmission(false);
+    Wire.requestFrom(MPU, 6, true);
+    AccX = (Wire.read() << 8 | Wire.read()) / 16384.0;
+    AccY = (Wire.read() << 8 | Wire.read()) / 16384.0;
+    AccZ = (Wire.read() << 8 | Wire.read()) / 16384.0;
+    //Read Gyroscope data
+    previousTime = currentTime;
+    currentTime = millis();
+    elapsedTime = (currentTime - previousTime) / 1000;
+    Wire.beginTransmission(MPU);
+    Wire.write(0x43);
+    Wire.endTransmission(false);
+    Wire.requestFrom(MPU, 6, true);
+    GyroX = (Wire.read() << 8 | Wire.read()) / 131.0;
+    GyroY = (Wire.read() << 8 | Wire.read()) / 131.0;
+    GyroZ = (Wire.read() << 8 | Wire.read()) / 131.0;
+    gyroAngleX = gyroAngleX + GyroX * elapsedTime;
+    gyroAngleY = gyroAngleY + GyroY * elapsedTime;
+    gyroAngleZ = gyroAngleZ + GyroZ * elapsedTime;
+    //Print data
+    Serial.print("X-axis: ");
+    Serial.print("Acceleration : ");
+    Serial.print(AccX);
+    Serial.print(" ");
+    Serial.print("Angle");
+    Serial.println(gyroAngleX);
+
+    Serial.print("Y-axis: ");
+    Serial.print("Acceleration : ");
+    Serial.print(AccY);
+    Serial.print(" ");
+    Serial.print("Angle");
+    Serial.println(gyroAngleY);
+
+    Serial.print("Z-axis: ");
+    Serial.print("Acceleration : ");
+    Serial.print(AccZ);
+    Serial.print(" ");
+    Serial.print("Angle");
+    Serial.println(gyroAngleZ);
+
+  }
+
+
+}
